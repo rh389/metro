@@ -1,4 +1,4 @@
-name: Deploy
+name: Build and commit/verify emhermesc.js
 
 on:
   push:
@@ -13,12 +13,13 @@ on:
       - ".github/workflows/build-emhermesc.yml"
 
 jobs:
-  build-emhermesc.js:
+  build-emhermesc-js:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code (PR)
         uses: actions/checkout@v2.0.0
+        # https://github.com/stefanzweifel/git-auto-commit-action#checkout-the-correct-branch
         if: github.event_name == 'pull_request' 
         with:
           ref: ${{ github.head_ref }}
@@ -87,7 +88,7 @@ jobs:
           name: emhermesc.js
           path: packages/metro-hermes-compiler/src/emhermesc.js
 
-      - name: Commit updated emhermesc.js to PR
+      - name: Commit updated emhermesc.js (PR only)
         uses: stefanzweifel/git-auto-commit-action@d0487b9fa3a792b5e90562c27541eedecc2548b4
         if: github.event_name == 'pull_request' 
         with:
