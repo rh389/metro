@@ -87,7 +87,7 @@ jobs:
           name: emhermesc.js
           path: packages/metro-hermes-compiler/src/emhermesc.js
 
-      - run: Commit updated emhermesc.js to PR
+      - name: Commit updated emhermesc.js to PR
         uses: stefanzweifel/git-auto-commit-action@master
         if: github.event_name == 'pull_request' 
         with:
