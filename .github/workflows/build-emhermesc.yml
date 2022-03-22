@@ -13,7 +13,7 @@ on:
       - ".github/workflows/build-emhermesc.yml"
 
 jobs:
-  build:
+  build-emhermesc.js:
     runs-on: ubuntu-latest
 
     steps:
@@ -48,10 +48,10 @@ jobs:
       - name: Build build_host_hermes
         run: cmake --build $RUNNER_TEMP/build_host_hermes --target hermesc
 
-      - name: Setup EMSDK
+      - name: Setup Emscripten SDK
         uses: mymindstorm/setup-emsdk@v11
 
-      - name: Configure Emscripten build
+      - name: Configure Emscripten hermes build
         run: |
           cmake $HERMES_CHECKOUT \
             -B $RUNNER_TEMP/embuild \
@@ -73,25 +73,25 @@ jobs:
               " \
             -DIMPORT_HERMESC:PATH="$RUNNER_TEMP/build_host_hermes/ImportHermesc.cmake"
 
-      - name: Build
+      - name: Build emhermesc
         run: cmake --build $RUNNER_TEMP/embuild --target emhermesc
 
-      - name: Add header
+      - name: Concatenate with emhermesc.js.header and move to packages/metro-hermes-compiler/src/emhermesc.js
         run: |
           cat packages/metro-hermes-compiler/src/emhermesc.js.header $RUNNER_TEMP/embuild/bin/emhermesc.js \
           > packages/metro-hermes-compiler/src/emhermesc.js
         
-      - name: Upload emhermesc.js
+      - name: Upload emhermesc.js as a CI artifact
         uses: actions/upload-artifact@v3
         with:
           name: emhermesc.js
           path: packages/metro-hermes-compiler/src/emhermesc.js
 
       - name: Commit updated emhermesc.js to PR
-        uses: stefanzweifel/git-auto-commit-action@master
+        uses: stefanzweifel/git-auto-commit-action@d0487b9fa3a792b5e90562c27541eedecc2548b4
         if: github.event_name == 'pull_request' 
         with:
           commit_message: "Auto: Build emhermesc.js from hermes/${{ env.HERMES_REVISION }}"
 
-      - name: Ensure the working tree is clean
+      - name: Fail if emhermesc.js is out of sync with hermes-revision
         run: if [ -n "$(git status --porcelain)" ]; then exit 1; fi
