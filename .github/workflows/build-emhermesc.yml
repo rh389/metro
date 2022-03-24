@@ -22,7 +22,7 @@ jobs:
         if: github.event_name == 'push'
 
       - name: Determine target revision from packages/metro-hermes-compiler/hermes-github-ref
-        run: echo "HERMES_GITHUB_REF=`cat packages/metro-hermes-compiler/hermes-github-ref`" >> $GITHUB_ENV
+        run: echo "HERMES_GITHUB_REF=`head -n 1 packages/metro-hermes-compiler/hermes-github-ref`" >> $GITHUB_ENV
 
       - name: Download hermes at ${{ env.HERMES_GITHUB_REF }}
         run: |
