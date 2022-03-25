@@ -17,19 +17,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout code (PR)
         uses: actions/checkout@v2.0.0
-        if: github.event_name == 'push'
+        # https://github.com/stefanzweifel/git-auto-commit-action#checkout-the-correct-branch
+        if: github.event_name == 'pull_request' 
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.head_ref }}
+
+      - name: Checkout code (Push)
+        uses: actions/checkout@v2.0.0
 
       - name: Determine target revision from packages/metro-hermes-compiler/hermes-github-ref
         run: echo "HERMES_GITHUB_REF=`head -n 1 packages/metro-hermes-compiler/hermes-github-ref`" >> $GITHUB_ENV
 
-      - name: Download hermes at ${{ env.HERMES_GITHUB_REF }}
-        run: |
-          mkdir $RUNNER_TEMP/hermes && curl \
-            -L https://api.github.com/repos/facebook/hermes/tarball/${{ env.HERMES_GITHUB_REF }} \
-            | tar xzf - -C $RUNNER_TEMP/hermes \
-            && echo "HERMES_CHECKOUT=`ls -d $RUNNER_TEMP/hermes/*`" >> $GITHUB_ENV
+      - name: Checkout facebook/hermes at ${{ env.HERMES_GITHUB_REF }}
+        uses: actions/checkout@v3
+        with:
+          repository: facebook/hermes
+          ref: ${{ env.HERMES_GITHUB_REF }}
+          path: ${{ runner.temp }}/hermes
 
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@856654e80dd21909aec244cd01bb96e5c841d64f
@@ -37,7 +44,7 @@ jobs:
           destination: ${{ runner.temp }}/ninja
 
       - name: Configure build_host_hermes
-        run: python3 $HERMES_CHECKOUT/utils/build/configure.py $RUNNER_TEMP/build_host_hermes
+        run: python3 $RUNNER_TEMP/hermes/utils/build/configure.py $RUNNER_TEMP/build_host_hermes
       
       - name: Build build_host_hermes
         run: cmake --build $RUNNER_TEMP/build_host_hermes --target hermesc
@@ -47,7 +54,7 @@ jobs:
 
       - name: Configure Emscripten hermes build
         run: |
-          cmake $HERMES_CHECKOUT \
+          cmake $RUNNER_TEMP/hermes \
             -B $RUNNER_TEMP/embuild \
             -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
             -DCMAKE_BUILD_TYPE=Release \
