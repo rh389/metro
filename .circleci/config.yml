@@ -124,7 +124,7 @@ jobs:
               TAG_ON_MAIN=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx '  remotes/origin/main' | wc -l)
               echo "Tag is on main branch: $TAG_ON_MAIN"
               if [ $TAG_ON_RELEASE_BRANCH -eq $TAG_ON_MAIN ]; then
-                  echo "Could not determine whether this tag is "latest" or a hotfix. Aborting."
+                  echo "Could not determine whether this tag is 'latest' or a hotfix. Aborting."
                   exit 1
               fi
               TAG="latest"
