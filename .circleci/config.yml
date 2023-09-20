@@ -108,7 +108,6 @@ jobs:
       - image: *node_lts_image
     steps:
       - checkout
-      - yarn_install
       - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
       - run:
           name: Publish based on tag conditions
