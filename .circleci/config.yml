@@ -110,7 +110,7 @@ jobs:
       - checkout
       - yarn_install
       - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-      - run: npm run publish
+      - run: npm run publish --dry-run
       - run: rm ~/.npmrc
 
 workflows:
