@@ -120,7 +120,7 @@ jobs:
               echo "Here1"
               echo "$CIRCLE_TAG $RELEASE_BRANCH"
               git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l
-              BRANCHES_CONTAINING_TAG=$(git branch -a --contains "$CIRCLE_TAG")
+              BRANCHES_CONTAINING_TAG=$(git branch -a --contains "$CIRCLE_TAG" 2>&1) || { echo "Error: $BRANCHES_CONTAINING_TAG"; exit 1; }
               echo "Branches containing tag: $BRANCHES_CONTAINING_TAG"
               
               MATCHING_BRANCH=$(echo "$BRANCHES_CONTAINING_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH")
