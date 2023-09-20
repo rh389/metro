@@ -120,6 +120,14 @@ jobs:
               echo "Here1"
               echo "$CIRCLE_TAG $RELEASE_BRANCH"
               git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l
+              BRANCHES_CONTAINING_TAG=$(git branch -a --contains "$CIRCLE_TAG")
+              echo "Branches containing tag: $BRANCHES_CONTAINING_TAG"
+              
+              MATCHING_BRANCH=$(echo "$BRANCHES_CONTAINING_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH")
+              echo "Matching branch: $MATCHING_BRANCH"
+              
+              LINE_COUNT=$(echo "$MATCHING_BRANCH" | wc -l)
+              echo "Line count: $LINE_COUNT"
               TAG_ON_RELEASE_BRANCH=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l)
               echo "Here2"
               echo "Tag is on release branch $RELEASE_BRANCH: $TAG_ON_RELEASE_BRANCH"
