@@ -112,6 +112,7 @@ jobs:
       - run:
           name: Publish based on tag conditions
           command: |
+              set +e
               # Reduce a semver tag name to a Metro's release branch naming convention, eg v0.1.2-alpha.3 -> 0.1.x 
               RELEASE_BRANCH=$(echo "$CIRCLE_TAG" | awk -F. '{print substr($1, 2) "." $2 ".x"}')
               echo "Release branch: $RELEASE_BRANCH"
@@ -139,6 +140,7 @@ jobs:
               fi
               TAG="latest"
               [ "$TAG_ON_RELEASE_BRANCH" -eq 1 ] && TAG=$RELEASE_BRANCH
+              set -e
               npm run publish --dist-tag=$TAG --dry-run
       - run: rm ~/.npmrc
 
