@@ -108,9 +108,25 @@ jobs:
       - image: *node_lts_image
     steps:
       - checkout
+      - 
       - yarn_install
       - run: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
-      - run: npm run publish --dry-run
+      - run:
+          name: Publish based on tag conditions
+          command: |
+              export RELEASE_BRANCH=$(echo "$CIRCLE_TAG" | awk -F. '{print substr($1, 2) "." $2 ".x"}')
+              echo "release: $RELEASE_BRANCH"
+              export TAG_ON_RELEASE_BRANCH=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l)
+              echo "on release: $TAG_ON_RELEASE_BRANCH"
+              export TAG_ON_MAIN=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx '  remotes/origin/main' | wc -l)
+              echo "main: $TAG_ON_MAIN"
+              if [ $TAG_ON_RELEASE_BRANCH -eq $TAG_ON_MAIN ]; then
+                  echo "Invalid tag conditions. Either both tags are set or none are set."
+                  exit 1
+              fi
+              TAG="latest"
+              [ "$TAG_ON_RELEASE_BRANCH" -eq 1 ] && TAG=$RELEASE_BRANCH
+              npm run publish --tag=$TAG --dry-run
       - run: rm ~/.npmrc
 
 workflows:
@@ -134,4 +150,4 @@ workflows:
             branches:
               ignore: /.*/
             tags:
-              only: /v[0-9]+(\.[0-9]+)*/
+              only: /v\d+(\.\d+){2}(-.*)?/
