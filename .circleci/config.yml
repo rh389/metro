@@ -113,6 +113,7 @@ jobs:
       - run:
           name: Publish based on tag conditions
           command: |
+              env
               # Reduce a semver tag name to a Metro's release branch naming convention, eg v0.1.2-alpha.3 -> 0.1.x 
               RELEASE_LINE=$(echo "$CIRCLE_TAG" | awk -F. '{print substr($1, 2) "." $2 ".x"}')
               echo "Release line: $RELEASE_LINE"`
