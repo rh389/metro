@@ -113,12 +113,15 @@ jobs:
       - run:
           name: Publish based on tag conditions
           command: |
-              env
               # Reduce a semver tag name to a Metro's release branch naming convention, eg v0.1.2-alpha.3 -> 0.1.x 
               RELEASE_BRANCH=$(echo "$CIRCLE_TAG" | awk -F. '{print substr($1, 2) "." $2 ".x"}')
               echo "Release branch: $RELEASE_BRANCH"
               # Does a release branch contain this tag (hotfix workflow) (0 or 1)
+              echo "Here1"
+              echo "$CIRCLE_TAG $RELEASE_BRANCH"
+              git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l
               TAG_ON_RELEASE_BRANCH=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l)
+              echo "Here2"
               echo "Tag is on release branch $RELEASE_BRANCH: $TAG_ON_RELEASE_BRANCH"
               # Does main contain this tag (0 or 1)
               TAG_ON_MAIN=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx '  remotes/origin/main' | wc -l)
