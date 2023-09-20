@@ -128,7 +128,8 @@ jobs:
               fi
               TAG="latest"
               [ "$TAG_ON_RELEASE_BRANCH" -eq 1 ] && TAG=$RELEASE_BRANCH
-              npm run publish --tag=$TAG --dry-run
+              echo "Using --tag=$TAG"
+              npm run publish --tag="$TAG"
       - run: rm ~/.npmrc
 
 workflows:
