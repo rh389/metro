@@ -119,7 +119,7 @@ jobs:
               echo "Release branch: $RELEASE_BRANCH"
               # Does a release branch contain this tag (hotfix workflow) (0 or 1)
               TAG_ON_RELEASE_BRANCH=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx "  remotes/origin/$RELEASE_BRANCH" | wc -l)
-              echo "Tag is on release branch $RELEASE_LINE: $TAG_ON_RELEASE_BRANCH"
+              echo "Tag is on release branch $RELEASE_BRANCH: $TAG_ON_RELEASE_BRANCH"
               # Does main contain this tag (0 or 1)
               TAG_ON_MAIN=$(git branch -a --contains "$CIRCLE_TAG" | grep -Fx '  remotes/origin/main' | wc -l)
               echo "Tag is on main branch: $TAG_ON_MAIN"
