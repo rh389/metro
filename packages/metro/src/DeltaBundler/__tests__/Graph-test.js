@@ -419,7 +419,7 @@ it('should populate all the inverse dependencies', async () => {
 
   expect(
     nullthrows(graph.dependencies.get('/bar')).inverseDependencies,
-  ).toEqual(new CountingSet(['/foo', '/bundle']));
+  ).toEqual(new CountingSet(['/bundle', '/foo']));
 });
 
 it('should return an empty result when there are no changes', async () => {
@@ -605,7 +605,7 @@ describe('edge cases', () => {
 
     expect(
       nullthrows(graph.dependencies.get('/foo')).inverseDependencies,
-    ).toEqual(new CountingSet(['/baz', '/bundle']));
+    ).toEqual(new CountingSet(['/bundle', '/baz']));
   });
 
   it('should handle renames correctly', async () => {
