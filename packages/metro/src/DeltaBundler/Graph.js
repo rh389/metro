@@ -248,7 +248,6 @@ export class Graph<T = MixedOutput> {
           addedKey,
           newModules,
           dependency,
-          delta,
           internalOptions,
         );
       }
@@ -256,6 +255,9 @@ export class Graph<T = MixedOutput> {
 
     for (const [absolutePath, newModule] of newModules) {
       const previousParent = this.dependencies.get(absolutePath);
+      // Because we're releasing modules as we go, this module may already have
+      // been removed from the graph by the time we reach it - in that case,
+      // its dependencies have already been removed and we have nothing to do.
       if (!previousParent) {
         continue;
       }
@@ -271,12 +273,15 @@ export class Graph<T = MixedOutput> {
           internalOptions,
         );
       }
+      // By this point, we have added and removed dependencies such that these
+      // maps should be identical except for ordering. Discard the
+      // unpredictably-ordered map and replace it with the ordering we obtained
+      // from the transformer.
+      // $FlowFixMe[cannot-write] - Refactor
       previousParent.dependencies = newModule.allDependencies;
     }
 
     this._collectCycles(delta);
-
-    this.reorderGraph({shallow: false});
 
     const added = new Map<string, Module<T>>();
     for (const path of delta.added) {
@@ -649,7 +654,6 @@ export class Graph<T = MixedOutput> {
     key: string,
     newModules: Map<string, NewModule<T>>,
     dependency: Dependency,
-    delta: Delta,
     options: InternalOptions<T>,
   ): void {
     const path = dependency.absolutePath;
