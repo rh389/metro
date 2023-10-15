@@ -40,6 +40,7 @@ import type {
   Options,
   TransformInputOptions,
   TransformResultDependency,
+  TransformResultWithSource,
 } from './types.flow';
 
 import CountingSet from '../lib/CountingSet';
@@ -73,6 +74,13 @@ export type Result<T> = {
   added: Map<string, Module<T>>,
   modified: Map<string, Module<T>>,
   deleted: Set<string>,
+};
+
+type NewModule<T> = {
+  removedDependencies: Map<string, Dependency>,
+  newDependencies: Map<string, Dependency>,
+  allDependencies: Map<string, Dependency>,
+  transformResult: TransformResultWithSource<T>,
 };
 
 /**
@@ -186,6 +194,9 @@ export class Graph<T = MixedOutput> {
       }
     }
 
+    const newModules = new Map<string, NewModule<T>>();
+    const seenModules = new Set<string>();
+
     for (const [path] of originalModules) {
       // Traverse over modules that are part of the dependency graph.
       //
@@ -194,15 +205,78 @@ export class Graph<T = MixedOutput> {
       // in that case the path will be visited if and when we add it back to
       // the graph in a subsequent iteration.
       if (this.dependencies.has(path)) {
-        await this._traverseDependenciesForSingleFile(
+        await this._gatherNewModules(
+          newModules,
+          seenModules,
           path,
+          internalOptions,
+        );
+      }
+    }
+
+    for (const [absolutePath, newModule] of newModules) {
+      const previousModule = this.dependencies.get(absolutePath);
+
+      const nextModule: Module<T> = {
+        ...(previousModule ?? {
+          inverseDependencies: new CountingSet(),
+          path: absolutePath,
+        }),
+        dependencies: new Map(previousModule?.dependencies ?? new Map()),
+        getSource: newModule.transformResult.getSource,
+        output: newModule.transformResult.output,
+        unstable_transformResultKey:
+          newModule.transformResult.unstable_transformResultKey,
+      };
+
+      if (previousModule == null) {
+        internalOptions.onDependencyAdd();
+        this.dependencies.set(absolutePath, nextModule);
+        internalOptions.onDependencyAdded();
+        delta.added.add(absolutePath);
+      } else {
+        this.dependencies.set(absolutePath, nextModule);
+        delta.modified.add(absolutePath);
+      }
+    }
+
+    for (const [absolutePath, newModule] of newModules) {
+      const parent = nullthrows(this.dependencies.get(absolutePath));
+      for (const [addedKey, dependency] of newModule.newDependencies) {
+        this._markDependencyAdded(
+          parent,
+          addedKey,
+          newModules,
+          dependency,
           delta,
           internalOptions,
         );
       }
     }
 
+    for (const [absolutePath, newModule] of newModules) {
+      const previousParent = this.dependencies.get(absolutePath);
+      if (!previousParent) {
+        continue;
+      }
+      for (const [
+        removedKey,
+        removedDependency,
+      ] of newModule.removedDependencies) {
+        this._removeDependency(
+          previousParent,
+          removedKey,
+          removedDependency,
+          delta,
+          internalOptions,
+        );
+      }
+      previousParent.dependencies = newModule.allDependencies;
+    }
+
     this._collectCycles(delta);
+
+    this.reorderGraph({shallow: false});
 
     const added = new Map<string, Module<T>>();
     for (const path of delta.added) {
@@ -307,6 +381,107 @@ export class Graph<T = MixedOutput> {
     await this._processModule(path, delta, options);
 
     options.onDependencyAdded();
+  }
+
+  async _gatherNewModules(
+    newModules: Map<string, NewModule<T>>,
+    seenModules: Set<string>,
+    path: string,
+    options: InternalOptions<T>,
+  ): Promise<void> {
+    if (seenModules.has(path)) {
+      return;
+    }
+    seenModules.add(path);
+
+    const resolvedContext = this.#resolvedContexts.get(path);
+
+    // Transform the file via the given option.
+    // TODO: Unbind the transform method from options
+    const result = await options.transform(path, resolvedContext);
+
+    // Get the absolute path of all sub-dependencies (some of them could have been
+    // moved but maintain the same relative path).
+    const currentDependencies = this._resolveDependencies(
+      path,
+      result.dependencies,
+      options,
+    );
+
+    const previousModule = this.dependencies.get(path);
+
+    const previousDependencies = previousModule?.dependencies ?? new Map();
+
+    const nextModule: NewModule<T> = {
+      newDependencies: new Map(),
+      allDependencies: currentDependencies,
+      removedDependencies: new Map(),
+      transformResult: result,
+    };
+
+    // Diff dependencies (1/2): remove dependencies that have changed or been removed.
+    for (const [key, prevDependency] of previousDependencies) {
+      const curDependency = currentDependencies.get(key);
+      if (
+        !curDependency ||
+        !dependenciesEqual(prevDependency, curDependency, options)
+      ) {
+        nextModule.removedDependencies.set(key, prevDependency);
+      }
+    }
+
+    // Diff dependencies (2/2): add dependencies that have changed or been added.
+    const addDependencyPromises = [];
+    for (const [key, curDependency] of currentDependencies) {
+      const prevDependency = previousDependencies.get(key);
+      if (
+        !prevDependency ||
+        !dependenciesEqual(prevDependency, curDependency, options)
+      ) {
+        nextModule.newDependencies.set(key, curDependency);
+      }
+    }
+
+    if (
+      previousModule &&
+      !transfromOutputMayDiffer(previousModule, nextModule.transformResult) &&
+      nextModule.removedDependencies.size === 0 &&
+      nextModule.newDependencies.size === 0
+    ) {
+      // We have not operated on nextModule, so restore previousModule
+      // to aid diffing.
+      return;
+    }
+
+    newModules.set(path, nextModule);
+
+    // Don't add nodes for dependencies if the graph is shallow (single-module)
+    if (options.shallow) {
+      return;
+    }
+
+    for (const dependency of nextModule.newDependencies.values()) {
+      if (
+        // Exclude weak dependencies from the bundle.
+        dependency.data.data.asyncType === 'weak' ||
+        // Don't add a node for the module if we are traversing async dependencies
+        // lazily (and this is an async dependency).
+        (options.lazy && dependency.data.data.asyncType != null)
+      ) {
+        // Exclude weak dependencies from the bundle.
+        continue;
+      }
+      addDependencyPromises.push(
+        this._gatherNewModules(
+          newModules,
+          seenModules,
+          dependency.absolutePath,
+          options,
+        ),
+      );
+    }
+
+    await Promise.all(addDependencyPromises);
   }
 
   async _processModule(
@@ -469,6 +644,42 @@ export class Graph<T = MixedOutput> {
     parentModule.dependencies.set(key, dependency);
   }
 
+  _markDependencyAdded(
+    parentModule: Module<T>,
+    key: string,
+    newModules: Map<string, NewModule<T>>,
+    dependency: Dependency,
+    delta: Delta,
+    options: InternalOptions<T>,
+  ): void {
+    const path = dependency.absolutePath;
+
+    // The module may already exist, in which case we just need to update some
+    // bookkeeping instead of adding a new node to the graph.
+    const module = this.dependencies.get(path);
+
+    if (options.shallow) {
+      // Don't add a node for the module if the graph is shallow (single-module).
+    } else if (dependency.data.data.asyncType === 'weak') {
+      // Exclude weak dependencies from the bundle.
+    } else if (options.lazy && dependency.data.data.asyncType != null) {
+      // Don't add a node for the module if we are traversing async dependencies
+      // lazily (and this is an async dependency). Instead, record it in
+      // importBundleNodes.
+      this._incrementImportBundleReference(dependency, parentModule);
+    } else if (module) {
+      // We either added a new node to the graph, or we're updating an existing one.
+      module.inverseDependencies.add(parentModule.path);
+      this._markModuleInUse(module);
+    }
+
+    // Always update the parent's dependency map.
+    // This means the parent's dependencies can get desynced from
+    // inverseDependencies and the other fields in the case of lazy edges.
+    // Not an optimal representation :(
+    parentModule.dependencies.set(key, dependency);
+  }
+
   _removeDependency(
     parentModule: Module<T>,
     key: string,
@@ -476,7 +687,13 @@ export class Graph<T = MixedOutput> {
     delta: Delta,
     options: InternalOptions<T>,
   ): void {
-    parentModule.dependencies.delete(key);
+    const existingDependency = parentModule.dependencies.get(key);
+    if (
+      existingDependency != null &&
+      dependenciesEqual(existingDependency, dependency, options)
+    ) {
+      parentModule.dependencies.delete(key);
+    }
 
     const {absolutePath} = dependency;
 
@@ -485,8 +702,11 @@ export class Graph<T = MixedOutput> {
       return;
     }
 
+    let hasInverseDependency = false;
     if (options.lazy && dependency.data.data.asyncType != null) {
       this._decrementImportBundleReference(dependency, parentModule);
+    } else if (dependency.data.data.asyncType !== 'weak') {
+      hasInverseDependency = true;
     }
 
     const module = this.dependencies.get(absolutePath);
@@ -494,7 +714,10 @@ export class Graph<T = MixedOutput> {
     if (!module) {
       return;
     }
-    module.inverseDependencies.delete(parentModule.path);
+
+    if (hasInverseDependency) {
+      module.inverseDependencies.delete(parentModule.path);
+    }
     if (
       module.inverseDependencies.size > 0 ||
       this.entryPoints.has(absolutePath)
@@ -891,7 +1114,10 @@ function contextParamsEqual(
   );
 }
 
-function transfromOutputMayDiffer<T>(a: Module<T>, b: Module<T>): boolean {
+function transfromOutputMayDiffer(
+  a: $ReadOnly<{unstable_transformResultKey: ?string, ...}>,
+  b: $ReadOnly<{unstable_transformResultKey: ?string, ...}>,
+): boolean {
   return (
     a.unstable_transformResultKey == null ||
     a.unstable_transformResultKey !== b.unstable_transformResultKey
